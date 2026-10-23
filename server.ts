@@ -2,6 +2,7 @@ import express from 'express';
 import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
@@ -199,23 +200,42 @@ const isProd = process.env.NODE_ENV === 'production';
 async function startServer() {
   const PORT = Number(process.env.PORT || 3000);
 
+  // Start listening immediately (< 10ms) for Cloud Run startup probe
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on port ${PORT}`);
   });
 
-  if (!isProd) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-    });
+  const distPath = path.resolve(__dirname, 'dist');
+  
+  if (isProd) {
+    // If dist/ doesn't exist, try building on the fly so 404s never happen
+    if (!fs.existsSync(path.join(distPath, 'index.html'))) {
+      try {
+        console.log('dist/ not found, building frontend on the fly...');
+        const { build } = await import('vite');
+        await build();
+        console.log('Frontend built successfully.');
+      } catch (e) {
+        console.warn('On-the-fly Vite build failed:', e);
+      }
+    }
+
+    if (fs.existsSync(path.join(distPath, 'index.html'))) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.resolve(distPath, 'index.html'));
+      });
+      return;
+    }
   }
+
+  // Fallback to Vite dev server middleware if not production or build failed
+  const { createServer: createViteServer } = await import('vite');
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: 'spa',
+  });
+  app.use(vite.middlewares);
 }
 
 startServer();
