@@ -1,0 +1,6 @@
+{
+  "name": "VCT VLR.gg Calendar Sync",
+  "description": "Sync official VCT tournament schedules from VLR.gg to Google Calendar using AI and Google Workspace integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
